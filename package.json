@@ -1,9 +1,9 @@
 {
   "name": "Kanhaiya-api",
-  "main": "index.js",
+  "main": "server.js",
   "type": "module",
   "scripts": {
-    "dev": "node --watch --env-file=.env index.js"
+    "dev": "node --watch --env-file=.env server.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
