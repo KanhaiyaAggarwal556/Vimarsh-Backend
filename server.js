@@ -25,9 +25,9 @@ app.use(
   cors({
     origin: [
       process.env.CLIENT_URL || "http://localhost:5173", // CHANGED FROM 3000 TO 5173
-      // "http://localhost:5173", // Vite dev server
-      // "http://localhost:3000", // React dev server (backup)
-      // "http://127.0.0.1:5173", // Alternative localhost
+      "http://localhost:5173", // Vite dev server
+      "http://localhost:3000", // React dev server (backup)
+      "http://127.0.0.1:5173", // Alternative localhost
     ],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
@@ -107,7 +107,8 @@ app.use("/auth", (req, res, next) => {
   console.log("User authenticated:", !!req.user);
   next();
 });
-
+// app.use("/api/posts", postRouter);    // For API calls with /api prefix
+// app.use("/api/users", userRouter);  
 // FIXED: Single route mounting - Remove duplicates
 app.use("/users", userRouter);
 app.use("/posts", postRouter); // This matches your frontend calls
@@ -115,8 +116,7 @@ app.use("/comments", commentRouter);
 app.use("/boards", boardRouter);
 app.use("/auth", authRouter);
 
-app.use("/api/posts", postRouter);    // For API calls with /api prefix
-app.use("/api/users", userRouter);  
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error("Global error handler:", err);
