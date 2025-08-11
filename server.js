@@ -21,19 +21,11 @@ const app = express();
 app.set("trust proxy", 1);
 
 // IMPORTANT: CORS MUST BE BEFORE ROUTES - FIXED ORDER AND ORIGINS
-app.use(
-  cors({
-    origin: [
-      process.env.CLIENT_URL || "http://localhost:5173", // CHANGED FROM 3000 TO 5173
-      "http://localhost:5173", // Vite dev server
-      "http://localhost:3000", // React dev server (backup)
-      "http://127.0.0.1:5173", // Alternative localhost
-    ],
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
+// const cors = require('cors');
+app.use(cors({
+  origin: 'https://vimarsh-solution.netlify.app'  // or '*' to allow all origins (not recommended for production)
+}));
+
 
 // Cookie parser middleware
 app.use(cookieParser());
