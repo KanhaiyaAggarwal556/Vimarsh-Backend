@@ -1,3 +1,4 @@
+// board.route.js - CORRECTED (removing undefined functions)
 import express from "express";
 import { 
     test,
@@ -23,49 +24,44 @@ import {
 
 const router = express.Router();
 
-// Test route
-router.get("/test", test);
+// ✅ CORRECTED ORDER: Only using functions that actually exist
 
-// CREATE routes
+// 1. Static routes (no parameters) - MUST BE FIRST
+router.get("/test", test);                                   
+router.get("/search", searchBoards);                         
+
+// 2. CREATE
 router.post("/", createBoard);
 
-// READ routes
-router.get("/", getAllBoards);                           // Get all boards with pagination & filtering
-router.get("/search", searchBoards);                     // Search boards by query (bio, interests, location)
-router.get("/:id", getBoardById);                        // Get specific board by ID with populated user & bookmarks
-router.get("/user/:userId", getBoardsByUser);            // Get all boards by user ID with pagination
-router.get("/user/:userId/bookmarks", getUserBookmarks); // Get user's bookmarked posts (flattened from all boards)
+// 3. READ - Base route
+router.get("/", getAllBoards);                           
 
-// NEW FOLLOW/UNFOLLOW routes
-router.post("/follow/:targetUserId", followUser);        // Follow a user (send currentUserId in body)
-router.post("/unfollow/:targetUserId", unfollowUser);    // Unfollow a user (send currentUserId in body)
-router.get("/user/:userId/followers", getFollowers);     // Get user's followers with pagination
-router.get("/user/:userId/following", getFollowing);     // Get user's following with pagination
-router.get("/follow-status/:currentUserId/:targetUserId", checkFollowStatus); // Check if currentUser follows targetUser
+// 4. User-specific routes (specific structure)
+router.get("/user/:userId", getBoardsByUser);            
+router.get("/user/:userId/bookmarks", getUserBookmarks); 
+router.get("/user/:userId/followers", getFollowers);     
+router.get("/user/:userId/following", getFollowing);     
+// REMOVED: router.get("/user/:userId/stats", getUserBoardStats); - function doesn't exist
+router.delete("/user/:userId", deleteBoardsByUser);      
 
-// UPDATE routes
-router.put("/:id", updateBoard);                         // Update board (coverPhoto, bio, website, interests, location)
-router.patch("/:id/social-stats", updateSocialStats);    // Update social stats directly (followers, following, posts)
-router.patch("/:id/social-increment", updateSocialStatsIncrement); // Increment/decrement social stats
+// 5. Location/Interest routes (consider changing to query params)
+router.get("/location/:location", getAllBoards);         
+router.get("/interests/:interest", getAllBoards);        
 
-// BOOKMARK routes (Post management)
-router.post("/:id/bookmark/:postId", addBookmark);       // Add post to board bookmarks
-router.delete("/:id/bookmark/:postId", removeBookmark);  // Remove post from board bookmarks
+// 6. Follow/unfollow routes
+router.post("/follow/:targetUserId", followUser);        
+router.post("/unfollow/:targetUserId", unfollowUser);    
+router.get("/follow-status/:currentUserId/:targetUserId", checkFollowStatus); 
 
-// DELETE routes
-router.delete("/:id", deleteBoard);                      // Delete specific board by ID
-router.delete("/user/:userId", deleteBoardsByUser);      // Delete all boards by user ID
+// 7. Routes with additional path segments (more specific than /:id)
+router.patch("/:id/social-stats", updateSocialStats);    
+router.patch("/:id/social-increment", updateSocialStatsIncrement); 
+router.post("/:id/bookmark/:postId", addBookmark);       
+router.delete("/:id/bookmark/:postId", removeBookmark);  
 
-// BULK operations
-router.get("/location/:location", getAllBoards);         // Get boards by location (use query param instead)
-router.get("/interests/:interest", getAllBoards);        // Get boards by interest (use query param instead)
-
-// STATISTICS routes (optional additions)
-// router.get("/stats/overview", getBoardStats);         // Get general board statistics
-// router.get("/user/:userId/stats", getUserBoardStats); // Get user's board statistics
-
-// VALIDATION routes (optional additions)
-// router.post("/validate/website", validateWebsite);    // Validate website URL format
-// router.post("/validate/interests", validateInterests); // Validate interests array
+// 8. LAST: Single parameter routes (most general)
+router.get("/:id", getBoardById);                        
+router.put("/:id", updateBoard);                          
+router.delete("/:id", deleteBoard);                      
 
 export default router;
