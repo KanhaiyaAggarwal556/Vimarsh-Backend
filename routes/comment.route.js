@@ -1,3 +1,4 @@
+// Fixed comment.route.js - Correct Route Order
 import express from "express";
 import {
     test,
@@ -11,19 +12,23 @@ import {
 
 const router = express.Router();
 
-// Test route
-router.get("/test", test);
+// ✅ FIXED ORDER: Static routes FIRST, parameterized routes LAST
 
-// CREATE
+// 1. Static routes first
+router.get("/test", test);                          // MOVED UP - was conflicting with /:id
+
+// 2. CREATE
 router.post("/", createComment);
 
-// READ - IMPORTANT: More specific routes should come BEFORE generic ones
-router.get("/post/:postId", getCommentsByPost);     // Get all comments for a specific post - MOVED UP
-router.get("/", getAllComments);                    // Get all comments with filtering & pagination
-router.get("/:id", getCommentById);                 // Get single comment by ID - MOVED DOWN
+// 3. READ - Static and multi-segment routes first
+router.get("/", getAllComments);                    
+router.get("/post/:postId", getCommentsByPost);     
 
-// UPDATE
-router.put("/:id", updateComment);                  // Update comment body
-router.patch("/:id/reactions", updateCommentReactions); // Update likes/dislikes
+// 4. UPDATE - Routes with additional path segments
+router.patch("/:id/reactions", updateCommentReactions); // MOVED UP - more specific than /:id
+
+// 5. LAST: Single parameter routes (most general)
+router.get("/:id", getCommentById);                 // MOVED TO END
+router.put("/:id", updateComment);                  // MOVED TO END
 
 export default router;

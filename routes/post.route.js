@@ -1,3 +1,4 @@
+// Fixed post.route.js - Correct Route Order
 import express from "express";
 import {
   getAllPosts,
@@ -15,20 +16,26 @@ import { authenticateToken, optionalAuth } from "../middlewares/auth.middleware.
 
 const router = express.Router();
 
-// Public routes with optional auth (to get user interaction data if available)
+// ✅ FIXED ORDER: Static routes FIRST, parameterized routes LAST
+
+// 1. Static routes (no parameters) - MUST BE FIRST
 router.get("/", optionalAuth, getAllPosts);
-router.get("/recent", optionalAuth, getRecentPosts);
-router.get("/trending", optionalAuth, getTrendingPosts);
-router.get("/:id", optionalAuth, getPostById);
+router.get("/recent", optionalAuth, getRecentPosts);           // MOVED UP - was conflicting with /:id
+router.get("/trending", optionalAuth, getTrendingPosts);       // MOVED UP - was conflicting with /:id
+
+// 2. Multi-word static routes
+router.get("/saved/user", authenticateToken, getUserSavedPosts); // MOVED UP - was conflicting with /:postId/interactions
+
+// 3. User-specific routes (specific structure)
 router.get("/user/:userId", optionalAuth, getPostsByUserId);
 router.get("/analytics/user/:userId", getUserAnalytics);
 
-// Protected routes (authentication required)
-router.post("/:id/reaction", authenticateToken, updatePostReaction);
-router.post("/:id/views", optionalAuth, incrementPostViews);
-router.get("/:id/interactions", authenticateToken, getUserPostInteractions);
+// 4. Post-specific routes with additional segments
+router.get("/:postId/interactions", authenticateToken, getUserPostInteractions);
+router.post("/:postId/reaction", authenticateToken, updatePostReaction);
+router.post("/:postId/views", optionalAuth, incrementPostViews);
 
-// New route for getting user's saved posts
-router.get("/saved/user", authenticateToken, getUserSavedPosts);
+// 5. LAST: Single parameter routes (most general)
+router.get("/:id", optionalAuth, getPostById);                // MOVED TO END
 
 export default router;
