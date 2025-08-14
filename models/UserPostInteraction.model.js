@@ -1,4 +1,5 @@
-// models/userPostInteraction.model.js
+// ===== 1. UPDATED UserPostInteraction Model =====
+// models/UserPostInteraction.model.js
 import { Schema } from "mongoose";
 import mongoose from "mongoose";
 
@@ -29,14 +30,25 @@ const UserPostInteractionSchema = new Schema({
         type: Boolean,
         default: false
     },
-    viewedAt: {
-        type: Date
+    lastInteraction: {
+        type: Date,
+        default: Date.now
     }
 }, {
     timestamps: true
 });
 
-// Ensure one interaction record per user-post pair
+// Ensure unique combination of user and post
 UserPostInteractionSchema.index({ user: 1, post: 1 }, { unique: true });
+
+// Middleware to ensure user can't like and dislike at the same time
+UserPostInteractionSchema.pre('save', function(next) {
+    if (this.liked && this.disliked) {
+        const error = new Error('Cannot like and dislike the same post simultaneously');
+        return next(error);
+    }
+    this.lastInteraction = new Date();
+    next();
+});
 
 export default mongoose.model("UserPostInteraction", UserPostInteractionSchema);

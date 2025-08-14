@@ -1,10 +1,10 @@
-// app.js or server.js - FIXED configuration
 import express from "express";
 import session from "express-session";
 import MongoStore from "connect-mongo";
 import cookieParser from "cookie-parser";
 import userRouter from "./routes/user.route.js";
 import postRouter from "./routes/post.route.js";
+import postInteractionRouter from "./routes/postInteraction.route.js"; // NEW IMPORT
 import commentRouter from "./routes/comment.route.js";
 import boardRouter from "./routes/board.route.js";
 import authRouter from "./routes/auth.route.js";
@@ -20,14 +20,13 @@ const app = express();
 // Trust proxy (important for production with reverse proxies)
 app.set("trust proxy", 1);
 
-// IMPORTANT: CORS MUST BE BEFORE ROUTES - FIXED ORDER AND ORIGINS
+// CORS configuration - MUST BE BEFORE ROUTES
 app.use(
   cors({
     origin: [
-      process.env.CLIENT_URL || "http://localhost:5173", // CHANGED FROM 3000 TO 5173
-      "http://localhost:5173", // Vite dev server
-      "http://localhost:3000", // React dev server (backup)
-      "http://127.0.0.1:5173", // Alternative localhost
+      "http://localhost:5173",  // Vite default
+      "http://localhost:3000",  // Backup
+      process.env.CLIENT_URL || "http://localhost:5173",
     ],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
@@ -45,14 +44,12 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 // Session configuration
 app.use(
   session({
-    secret:
-      process.env.SESSION_SECRET ||
-      "your-very-secure-session-secret-change-this",
+    secret: process.env.SESSION_SECRET || "your-very-secure-session-secret-change-this",
     resave: false,
     saveUninitialized: false,
     name: "sessionId",
     store: MongoStore.create({
-      mongoUrl: process.env.MONGO_URL || "mongodb://localhost:27017/vimarsh", // FIXED: Use MONGO_URL from your env
+      mongoUrl: process.env.MONGO_URL || "mongodb://localhost:27017/vimarsh",
       touchAfter: 24 * 3600,
     }),
     cookie: {
@@ -71,17 +68,14 @@ app.use(passport.session());
 // Debug middleware for cookies and authentication
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.path}`);
-  console.log(
-    "Cookies:",
-    req.cookies ? Object.keys(req.cookies) : "No cookies"
-  );
+  console.log("Cookies:", req.cookies ? Object.keys(req.cookies) : "No cookies");
   if (req.cookies && req.cookies.accessToken) {
     console.log("Access token present");
   }
   next();
 });
 
-// Health check endpoint (before routes)
+// Health check endpoint
 app.get("/health", (req, res) => {
   res.json({
     status: "OK",
@@ -107,15 +101,14 @@ app.use("/auth", (req, res, next) => {
   console.log("User authenticated:", !!req.user);
   next();
 });
-// app.use("/api/posts", postRouter);    // For API calls with /api prefix
-// app.use("/api/users", userRouter);  
-// FIXED: Single route mounting - Remove duplicates
+
+// ROUTE MOUNTING - PROPER ORDER
+app.use("/auth", authRouter);
 app.use("/users", userRouter);
-app.use("/posts", postRouter); // This matches your frontend calls
+app.use("/posts", postRouter);
+app.use("/post-interactions", postInteractionRouter); // NEW ROUTE ADDED
 app.use("/comments", commentRouter);
 app.use("/boards", boardRouter);
-app.use("/auth", authRouter);
-
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -136,12 +129,10 @@ app.listen(PORT, () => {
   console.log(`  Health check: http://localhost:${PORT}/health`);
   console.log(`  Test cookies: http://localhost:${PORT}/test-cookies`);
   console.log(`  Google OAuth: http://localhost:${PORT}/auth/google`);
-  console.log(`  Facebook OAuth: http://localhost:${PORT}/auth/facebook`);
-  console.log(`  LinkedIn OAuth: http://localhost:${PORT}/auth/linkedin`);
-  console.log(`  User status: http://localhost:${PORT}/auth/user`);
-  console.log(`  Posts API: http://localhost:${PORT}/api/posts`);
-  console.log(`  Users API: http://localhost:${PORT}/api/users`);
-  console.log(`  Login: POST http://localhost:${PORT}/api/users/auth/login`);
-  console.log(`  Register: POST http://localhost:${PORT}/api/users/auth/register`);
-  console.log(`  Logout: POST http://localhost:${PORT}/api/users/auth/logout`);
+  console.log(`  Posts API: http://localhost:${PORT}/posts`);
+  console.log(`  Post Interactions: http://localhost:${PORT}/post-interactions`);
+  console.log(`  Like Post: POST http://localhost:${PORT}/post-interactions/:postId/like`);
+  console.log(`  Dislike Post: POST http://localhost:${PORT}/post-interactions/:postId/dislike`);
+  console.log(`  Get Interaction Status: GET http://localhost:${PORT}/post-interactions/:postId/status`);
 });
+
