@@ -1,4 +1,4 @@
-// Fixed comment.route.js - Correct Route Order
+// Updated comment.route.js - Simplified for likes only
 import express from "express";
 import {
     test,
@@ -12,10 +12,10 @@ import {
 
 const router = express.Router();
 
-// ✅ FIXED ORDER: Static routes FIRST, parameterized routes LAST
+// ✅ CORRECT ORDER: Static routes FIRST, parameterized routes LAST
 
 // 1. Static routes first
-router.get("/test", test);                          // MOVED UP - was conflicting with /:id
+router.get("/test", test);
 
 // 2. CREATE
 router.post("/", createComment);
@@ -25,10 +25,10 @@ router.get("/", getAllComments);
 router.get("/post/:postId", getCommentsByPost);     
 
 // 4. UPDATE - Routes with additional path segments
-router.patch("/:id/reactions", updateCommentReactions); // MOVED UP - more specific than /:id
+router.patch("/:id/like", updateCommentReactions); // Updated endpoint name for clarity
 
 // 5. LAST: Single parameter routes (most general)
-router.get("/:id", getCommentById);                 // MOVED TO END
-router.put("/:id", updateComment);                  // MOVED TO END
+router.get("/:id", getCommentById);                 
+router.put("/:id", updateComment);                  
 
 export default router;

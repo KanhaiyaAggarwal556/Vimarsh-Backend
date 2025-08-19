@@ -139,14 +139,13 @@ const calculateCommentScore = (comment, randomSeed = 1) => {
     const commentAge = now - new Date(comment.createdAt);
     const ageInHours = commentAge / (1000 * 60 * 60);
     
-    // Base reaction score (likes worth more than dislikes)
-    const reactionScore = (comment.reactions.likes * 2) - (comment.reactions.dislikes * 0.5);
+    // Base reaction score (only likes now)
+    const reactionScore = comment.reactions.likes * 2;
     
     // Time decay factor - newer comments get boost
     const timeDecayFactor = Math.max(0.1, 1 / (1 + ageInHours / 24)); // Decay over days
     
     // Deterministic "random" factor based on comment ID and seed
-    // This ensures same comment gets same score across requests with same seed
     const commentIdNumber = parseInt(comment._id.toString().slice(-8), 16);
     const pseudoRandom = ((commentIdNumber * randomSeed) % 1000) / 1000;
     const randomFactor = 0.3;
@@ -173,7 +172,26 @@ const getCommentOrderingStrategy = (page, postId) => {
     }
 };
 
-// READ - Get comments by post ID with consistent pagination (FIXED VERSION)
+// Helper function to add user reaction info to comments
+const addUserReactionInfo = (comments, userId) => {
+    return comments.map(comment => {
+        const commentObj = typeof comment.toObject === 'function' ? comment.toObject() : comment;
+        
+        // Check if user has liked this comment
+        if (userId && commentObj.likedBy) {
+            commentObj.userHasLiked = commentObj.likedBy.includes(userId);
+        } else {
+            commentObj.userHasLiked = false;
+        }
+        
+        // Remove likedBy array from response for privacy
+        delete commentObj.likedBy;
+        
+        return commentObj;
+    });
+};
+
+// READ - Get comments by post ID with consistent pagination (UPDATED VERSION)
 export const getCommentsByPost = async (req, res) => {
     try {
         const { postId } = req.params;
@@ -225,7 +243,6 @@ export const getCommentsByPost = async (req, res) => {
             case 'popular':
                 sortCriteria = { 
                     'reactions.likes': -1, 
-                    'reactions.dislikes': 1, 
                     createdAt: -1 
                 };
                 break;
@@ -256,12 +273,12 @@ export const getCommentsByPost = async (req, res) => {
                 
             case 'smart':
             default:
-                // FIXED: Smart ordering with consistent pagination
+                // Smart ordering with consistent pagination
                 const { strategy, seed } = getCommentOrderingStrategy(pageNum, postId);
                 
-                // For smart ordering, we need a larger sample to work with, but we'll be more strategic
-                const sampleSize = Math.max(limitNum * 5, 100); // Get larger sample
-                const baseSkip = Math.max(0, (pageNum - 1) * limitNum - limitNum); // Start a bit earlier
+                // For smart ordering, we need a larger sample to work with
+                const sampleSize = Math.max(limitNum * 5, 100);
+                const baseSkip = Math.max(0, (pageNum - 1) * limitNum - limitNum);
                 
                 // Fetch a larger sample around our target page
                 const sampleComments = await Comment.find({ post: postId })
@@ -284,7 +301,6 @@ export const getCommentsByPost = async (req, res) => {
                             return b._score - a._score;
                         } else if (strategy === 'popular_leaning') {
                             const scoreDiff = b._score - a._score;
-                            // Add small deterministic variance based on IDs
                             const aVar = (parseInt(a._id.toString().slice(-4), 16) % 100) / 1000;
                             const bVar = (parseInt(b._id.toString().slice(-4), 16) % 100) / 1000;
                             return scoreDiff + (bVar - aVar) * 0.3;
@@ -293,7 +309,7 @@ export const getCommentsByPost = async (req, res) => {
                             const timeDiff = new Date(b.createdAt) - new Date(a.createdAt);
                             const aVar = (parseInt(a._id.toString().slice(-4), 16) % 3600000);
                             const bVar = (parseInt(b._id.toString().slice(-4), 16) % 3600000);
-                            return timeDiff + (bVar - aVar); // ±1 hour deterministic variance
+                            return timeDiff + (bVar - aVar);
                         }
                     });
 
@@ -327,14 +343,8 @@ export const getCommentsByPost = async (req, res) => {
         const total = await Comment.countDocuments({ post: postId });
         const totalPages = Math.ceil(total / limitNum);
 
-        // Add user reaction info to each comment if userId is provided
-        const commentsWithReactions = comments.map(comment => {
-            const commentObj = typeof comment.toObject === 'function' ? comment.toObject() : comment;
-            if (userId) {
-                commentObj.userReaction = getUserReactionForComment(userId, commentObj._id.toString());
-            }
-            return commentObj;
-        });
+        // Add user reaction info to each comment
+        const commentsWithReactions = addUserReactionInfo(comments, userId);
 
         console.log(`Returning ${commentsWithReactions.length} comments (${orderType} ordering) - Page ${pageNum}`);
 
@@ -373,7 +383,7 @@ const getOrderingDescription = (orderType, page) => {
             if (page === 2) return 'Popular comments with some variety';
             return 'Mixed chronological ordering';
         case 'popular':
-            return 'Ordered by most reactions';
+            return 'Ordered by most likes';
         case 'recent':
             return 'Newest comments first';
         case 'random':
@@ -423,6 +433,7 @@ export const getCommentsWithStrategy = async (req, res) => {
 export const getCommentById = async (req, res) => {
     try {
         const { id } = req.params;
+        const { userId } = req.query;
 
         const comment = await Comment.findById(id)
             .populate('user', '_id userName fullName profilepic email')
@@ -435,9 +446,12 @@ export const getCommentById = async (req, res) => {
             });
         }
 
+        // Add user reaction info
+        const commentsWithReactions = addUserReactionInfo([comment], userId);
+
         res.status(200).json({
             success: true,
-            data: comment
+            data: commentsWithReactions[0]
         });
 
     } catch (error) {
@@ -497,33 +511,29 @@ export const updateComment = async (req, res) => {
     }
 };
 
-// Create a simple in-memory store for user reactions
-const userReactions = new Map(); // Format: "userId:commentId" -> "like" | "dislike"
-
-// Helper function to get/set user reactions
-const getUserReactionKey = (userId, commentId) => `${userId}:${commentId}`;
-
+// UPDATED - Handle comment likes (persistent solution)
 export const updateCommentReactions = async (req, res) => {
     try {
         const { id } = req.params;
-        const { action, userId } = req.body; // 'like' or 'dislike' and userId
+        const { userId } = req.body;
 
-        console.log(`Updating reaction for comment ${id}: ${action} by user ${userId}`); // Debug log
+        console.log(`Toggling like for comment ${id} by user ${userId}`);
 
         // Add small delay to make reaction feel more responsive but visible
-        await new Promise(resolve => setTimeout(resolve, 400)); // 400ms delay
-
-        if (!['like', 'dislike'].includes(action)) {
-            return res.status(400).json({
-                success: false,
-                message: "Action must be 'like' or 'dislike'"
-            });
-        }
+        await new Promise(resolve => setTimeout(resolve, 400));
 
         if (!userId) {
             return res.status(400).json({
                 success: false,
                 message: "userId is required"
+            });
+        }
+
+        // Validate userId is a valid ObjectId
+        if (!mongoose.Types.ObjectId.isValid(userId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid user ID format"
             });
         }
 
@@ -536,60 +546,37 @@ export const updateCommentReactions = async (req, res) => {
             });
         }
 
-        // Get current user's reaction
-        const reactionKey = getUserReactionKey(userId, id);
-        const currentReaction = userReactions.get(reactionKey);
-        let newReaction = null;
-
-        // Handle reaction logic
-        if (currentReaction === action) {
-            // Same reaction clicked - toggle off (remove reaction)
-            userReactions.delete(reactionKey);
-            newReaction = null;
-            
-            // Decrease the count
-            if (action === 'like') {
-                comment.reactions.likes = Math.max(0, comment.reactions.likes - 1);
-            } else {
-                comment.reactions.dislikes = Math.max(0, comment.reactions.dislikes - 1);
-            }
+        // Check if user has already liked this comment
+        const userObjectId = new mongoose.Types.ObjectId(userId);
+        const hasLiked = comment.likedBy.includes(userObjectId);
+        
+        let userHasLiked = false;
+        
+        if (hasLiked) {
+            // User has already liked - remove like
+            comment.likedBy.pull(userObjectId);
+            comment.reactions.likes = Math.max(0, comment.reactions.likes - 1);
+            userHasLiked = false;
+            console.log(`Removed like from comment ${id}`);
         } else {
-            // Different reaction or no previous reaction
-            
-            // If user had a previous different reaction, decrease that count
-            if (currentReaction === 'like') {
-                comment.reactions.likes = Math.max(0, comment.reactions.likes - 1);
-            } else if (currentReaction === 'dislike') {
-                comment.reactions.dislikes = Math.max(0, comment.reactions.dislikes - 1);
-            }
-            
-            // Set new reaction
-            userReactions.set(reactionKey, action);
-            newReaction = action;
-            
-            // Increase the new reaction count
-            if (action === 'like') {
-                comment.reactions.likes += 1;
-            } else {
-                comment.reactions.dislikes += 1;
-            }
+            // User hasn't liked - add like
+            comment.likedBy.push(userObjectId);
+            comment.reactions.likes += 1;
+            userHasLiked = true;
+            console.log(`Added like to comment ${id}`);
         }
 
         await comment.save();
 
-        // Populate comment for response
-        await comment.populate([
-            { path: 'user', select: '_id userName fullName profilepic email' },
-            { path: 'post', select: '_id' }
-        ]);
-
         res.status(200).json({
             success: true,
-            message: `Comment reaction updated successfully`,
+            message: `Comment ${userHasLiked ? 'liked' : 'unliked'} successfully`,
             data: {
                 _id: comment._id,
-                reactions: comment.reactions,
-                userReaction: newReaction
+                reactions: {
+                    likes: comment.reactions.likes
+                },
+                userHasLiked: userHasLiked
             }
         });
 
@@ -601,12 +588,6 @@ export const updateCommentReactions = async (req, res) => {
             error: error.message
         });
     }
-};
-
-// Helper function to get user's reaction for a comment
-export const getUserReactionForComment = (userId, commentId) => {
-    const reactionKey = getUserReactionKey(userId, commentId);
-    return userReactions.get(reactionKey) || null;
 };
 
 // Export the helper functions for potential reuse

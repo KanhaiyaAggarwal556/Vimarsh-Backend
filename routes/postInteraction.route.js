@@ -2,20 +2,29 @@ import express from "express";
 import { 
     toggleLike, 
     toggleDislike, 
-    getUserPostInteraction 
+    getUserPostInteraction,
+    trackPostView,
+    trackMultiplePostViews,
+    getPostAnalytics,
+    viewTrackingRateLimit // Import from controller, not middleware
 } from "../controllers/postInteraction.controller.js";
-import { authenticateToken } from "../middlewares/auth.middleware.js"; // Using your existing auth
+import { authenticateToken } from "../middlewares/auth.middleware.js";
 
 const router = express.Router();
 
-// All routes require authentication using your existing middleware
+// Apply authentication to all routes
 router.use(authenticateToken);
 
-// Like/Dislike routes
+// View tracking routes (with rate limiting)
+router.post("/:postId/view", viewTrackingRateLimit, trackPostView);
+router.post("/batch-views", viewTrackingRateLimit, trackMultiplePostViews);
+
+// Interaction routes
 router.post("/:postId/like", toggleLike);
 router.post("/:postId/dislike", toggleDislike);
 
-// Get user interaction status
+// Status and analytics routes
 router.get("/:postId/status", getUserPostInteraction);
+router.get("/:postId/analytics", getPostAnalytics);
 
 export default router;
