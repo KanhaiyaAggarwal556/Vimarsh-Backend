@@ -23,9 +23,6 @@ const app = express();
 app.set("trust proxy", 1);
 
 // ============ MIDDLEWARE CONFIGURATION ============
-
-// CORS configuration - MUST BE BEFORE ROUTES
-// ============ CORS CONFIGURATION - ENHANCED ============
 app.use(
   cors({
     origin: function (origin, callback) {
@@ -37,6 +34,7 @@ app.use(
         "http://localhost:3000",  // React default
         "http://127.0.0.1:5173",  // Alternative localhost
         "http://127.0.0.1:3000",
+        "https://vimarsh-social.netlify.app", // Your production frontend URL
         process.env.CLIENT_URL,
       ].filter(Boolean); // Remove undefined values
       
